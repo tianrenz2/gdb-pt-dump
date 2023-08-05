@@ -204,7 +204,7 @@ class PT_x86_64_Backend(PT_x86_Common_Backend, PTArchBackend):
     def __init__(self, phys_mem):
         self.phys_mem = phys_mem
 
-    def parse_tables(self, cache, args):
+    def parse_tables(self, cache, args, reverse_mapping_cache):
         # Check that paging is enabled, otherwise no point to continue.
         if has_paging_enabled() == False:
             raise Exception("Paging is not enabled")
@@ -231,7 +231,12 @@ class PT_x86_64_Backend(PT_x86_Common_Backend, PTArchBackend):
             ptes, big_pages = parse_pdes(self.phys_mem, pdes)
             small_pages = []
             for pte in ptes:
-                small_pages.append(create_page_from_pte(pte))
+                pg = create_page_from_pte(pte)
+                small_pages.append(pg)
+                phys_addr = hex(pg.phys[0])
+                virt_addr = hex(pg.va)
+                reverse_mapping_cache[str(phys_addr)] = virt_addr
+                print("page virt={} phys={}".format(virt_addr, phys_addr))
             page_ranges = optimize(large_pages, big_pages, small_pages, rwxs_semantically_similar)
 
         # Cache the page table if caching is set.

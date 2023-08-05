@@ -113,6 +113,10 @@ class PageTableDump(gdb.Command):
             already been trarversed. Using this option bypasses an optimization which discards already
             traversed duplicate entries. Expect that using this option would render pt unusable for
             windows VMs.
+        -parse_reverse_mapping
+            Parse page table and build mapping from physical addr to virtual addr
+        -get_va_from_pa
+            Get virtual addr from physical addr
 
     Architecture-specific arguments:
         - X86-32 / X86-64
@@ -198,6 +202,8 @@ class PageTableDump(gdb.Command):
 
         if self.backend.get_arch() == "x86_64" or self.backend.get_arch() == "x86_32":
             self.parser.add_argument("-cr3", nargs=1)
+            self.parser.add_argument("-parse_reverse_mapping", action="store_true")
+            self.parser.add_argument("-get_va_from_pa", nargs=1, type=str)
 
         if self.backend.get_arch() == "aarch64":
             self.parser.add_argument("-ttbr0_el1", nargs=1)
@@ -207,6 +213,7 @@ class PageTableDump(gdb.Command):
             self.parser.add_argument("-satp", nargs=1)
 
         self.cache = dict()
+        self.reverse_mapping_cache = dict()
 
         self.init = True
 
@@ -222,6 +229,17 @@ class PageTableDump(gdb.Command):
 
         if args.clear:
             self.cache = dict()
+            return
+
+        if args.get_va_from_pa:
+            pa = str(args.get_va_from_pa[0])
+            print("get va from {}".format(pa))
+            
+            if pa not in self.reverse_mapping_cache:
+                print("{} not found in page table".format(pa))
+                return
+
+            print("va is {}".format(self.reverse_mapping_cache[pa]))
             return
 
         to_search = None
@@ -250,7 +268,7 @@ class PageTableDump(gdb.Command):
         page_ranges = None
         page_ranges_filtered = None
         if requires_page_table_parsing:
-            page_ranges = self.backend.parse_tables(self.cache, args)
+            page_ranges = self.backend.parse_tables(self.cache, args, reverse_mapping_cache=self.reverse_mapping_cache)
             compound_filter, (min_address, max_address) = self.parse_filter_args(args)
             page_ranges_filtered = list(filter(compound_filter, page_ranges))
             # Perform cut-off of start and end.
@@ -286,6 +304,8 @@ class PageTableDump(gdb.Command):
             if leaks:
                 inner_find_leaks(leaks[0], 3)
                 inner_find_leaks(leaks[1], 5)
+        elif args.parse_reverse_mapping:
+            print("Page table parsed\n: {}".format(self.reverse_mapping_cache))
         elif args.info:
             self.backend.print_stats()
         elif args.find_alias:
